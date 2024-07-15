@@ -1079,6 +1079,7 @@ class KubeSpawner(Spawner):
             List(),
             Dict(),
         ],
+        default_value={},
         config=True,
         help="""
         List of paths on which to mount volumes in the user notebook's pod, or a dictionary
@@ -2054,6 +2055,8 @@ class KubeSpawner(Spawner):
         annotations = self._build_common_annotations(
             self._expand_all(self.extra_annotations)
         )
+
+        print(f"volume mounts during pod creation: {self.volume_mounts}")
 
         return make_pod(
             name=self.pod_name,
