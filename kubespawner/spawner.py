@@ -1262,28 +1262,40 @@ class KubeSpawner(Spawner):
         """,
     )
 
-    init_containers = List(
+    init_containers = Union(
+        trait_types=[
+            List(),
+            Dict(),
+        ],
         config=True,
         help="""
-        List of initialization containers belonging to the pod.
+        List of initialization containers belonging to the pod, or a dictionary
+        where the values specify the initialization containers.
 
-        This list will be directly added under `initContainers` in the kubernetes pod spec,
-        so you should use the same structure. Each item in the dict must a field
-        of the `V1Container specification <https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#container-v1-core>`__
+        If provided as a list, it will be directly added under `initContainers` in the kubernetes pod spec.
 
-        One usage is disabling access to metadata service from single-user
-        notebook server with configuration below::
+        If provided as a dictionary, the items will be sorted lexicographically by the dictionary keys and
+        then the sorted values will be added to the `initContainers` key. The keys of the
+        dictionary can be any descriptive name for the init container.
 
-            c.KubeSpawner.init_containers = [{
-                "name": "init-iptables",
-                "image": "<image with iptables installed>",
-                "command": ["iptables", "-A", "OUTPUT", "-p", "tcp", "--dport", "80", "-d", "169.254.169.254", "-j", "DROP"],
-                "securityContext": {
-                    "capabilities": {
-                        "add": ["NET_ADMIN"]
+        Each item (whether in the list or dictionary values) must be a dictionary containing
+        fields from the `V1Container specification <https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#container-v1-core>`__.
+
+        Example usage for disabling access to metadata service from single-user
+        notebook server:
+
+            c.KubeSpawner.init_containers = {
+                "disable-metadata-access": {
+                    "name": "init-iptables",
+                    "image": "<image with iptables installed>",
+                    "command": ["iptables", "-A", "OUTPUT", "-p", "tcp", "--dport", "80", "-d", "169.254.169.254", "-j", "DROP"],
+                    "securityContext": {
+                        "capabilities": {
+                            "add": ["NET_ADMIN"]
+                        }
                     }
                 }
-            }]
+            }
 
 
         See `the Kubernetes documentation <https://kubernetes.io/docs/concepts/workloads/pods/init-containers/>`__
@@ -3264,6 +3276,7 @@ class KubeSpawner(Spawner):
                 )
             else:
                 self.log.debug(".. overriding KubeSpawner value %s=%s", k, v)
+                self.log.debug(f".. Value before overriding: {getattr(self, k)}")
 
             # If v is a dict, *merge* it with existing values, rather than completely
             # resetting it. This allows *adding* things like environment variables rather
@@ -3271,8 +3284,11 @@ class KubeSpawner(Spawner):
             # will be removed
             if isinstance(v, dict) and isinstance(getattr(self, k), dict):
                 recursive_update(getattr(self, k), v)
+                self.log.debug(f".. Value after overriding: {getattr(self, k)}")
             else:
                 setattr(self, k, v)
+                self.log.debug(".. overriding by replacement")
+                self.log.debug(f".. Value after overriding: {getattr(self, k)}")
 
     def _load_profile(self, slug, profile_list):
         """
